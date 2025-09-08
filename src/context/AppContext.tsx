@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase, isSupabaseAvailable } from '../lib/supabase';
+import { supabase, isSupabaseAvailable, testSupabaseConnection } from '../lib/supabase';
 import { translations } from '../utils/translations';
 import { Member, Payment, AttendanceRecord, Subscription, AppSettings } from '../types';
 import { mockSubscriptionPlans } from '../mocks/subscriptions';
@@ -102,25 +102,36 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDbConnected, setIsDbConnected] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Test database connection on initialization
-const testSupabaseConnection = async () => {
-  try {
-    const { data, error } = await supabase.from('app_settings').select('*').limit(1);
-    if (error) {
-      console.error('Supabase connection failed:', error);
-      return false;
-    }
-    console.log('Supabase connected successfully');
-    return true;
-  } catch (err) {
-    console.error('Connection error:', err);
-    return false;
-  }
-};
+  // Initialize database connection and settings
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        setLoading(true);
+        
+        // Test database connection
+        const connectionResult = await testSupabaseConnection();
+        setIsDbConnected(connectionResult.success);
+        
+        if (connectionResult.success) {
+          console.log('Database connected, loading settings...');
+          await loadSettingsFromDatabase();
+        } else {
+          console.warn('Database unavailable, using localStorage settings');
+        }
+      } catch (error) {
+        console.error('App initialization error:', error);
+        setError('Failed to initialize application');
+      } finally {
+        setLoading(false);
+        setIsInitialized(true);
+      }
+    };
 
-// Veya daha basit - çağrıyı kaldır:
-// testSupabaseConnection(); satırını comment'le veya sil
+    initializeApp();
+  }, []);
+
   // Save data to localStorage whenever state changes
   useEffect(() => {
     try {
@@ -291,172 +302,218 @@ const testSupabaseConnection = async () => {
       const newSettings = { ...settings, ...updates };
       setSettings(newSettings);
       
+      // Save to localStorage immediately
+      localStorage.setItem('forfit-settings', JSON.stringify(newSettings));
+      
       // Save to database
-      if (isSupabaseAvailable) {
-        saveSettingsToDatabase(newSettings);
+      if (isSupabaseAvailable && isDbConnected) {
+        saveSettingsToDatabase(newSettings).then(success => {
+          if (success) {
+            toast.success('Settings saved successfully!');
+          } else {
+            toast.error('Failed to save to database, saved locally');
+          }
+        });
       } else {
-        toast.success('Settings saved locally (database unavailable)');
+        toast.success('Settings saved locally');
       }
     } catch (error) {
       console.error('Error updating settings:', error);
+      toast.error('Failed to update settings');
       setError('Failed to update settings');
     }
   };
 
   // Save settings to Supabase database
-  const saveSettingsToDatabase = async (settingsData: AppSettings) => {
+  const saveSettingsToDatabase = async (settingsData: AppSettings): Promise<boolean> => {
     if (!isSupabaseAvailable) {
-      return;
-    }
-
-    if (!isDbConnected) {
-      console.warn('Database not available, settings saved to localStorage only');
-      toast.success('Settings saved locally (database unavailable)');
-      return;
+      console.warn('Supabase not available, skipping database save');
+      return false;
     }
 
     try {
       setLoading(true);
-      const { error } = await supabase
+      
+      // First check if settings record exists
+      const { data: existingSettings, error: selectError } = await supabase
         .from('app_settings')
-        .upsert({
-          id: settingsData.id || '1',
-          studio_name: settingsData.studioName,
-          language: settingsData.language,
-          currency: settingsData.currency,
-          timezone: settingsData.timezone || 'UTC',
-          logo: settingsData.logo,
-          favicon: settingsData.favicon,
-          theme: settingsData.theme,
-          typing_glow_enabled: settingsData.typingGlowEnabled !== false,
-          updated_at: new Date().toISOString(),
-        });
+        .select('id')
+        .limit(1);
+
+      if (selectError && selectError.code !== 'PGRST116') {
+        throw selectError;
+      }
+
+      const settingsRecord = {
+        id: settingsData.id || '1',
+        studio_name: settingsData.studioName,
+        language: settingsData.language,
+        currency: settingsData.currency,
+        timezone: settingsData.timezone || 'UTC',
+        studio_logo: settingsData.logo || null,
+        favicon_url: settingsData.favicon || null,
+        theme: settingsData.theme,
+        typing_glow_enabled: settingsData.typingGlowEnabled !== false,
+        updated_at: new Date().toISOString(),
+      };
+
+      let error;
+      
+      if (!existingSettings || existingSettings.length === 0) {
+        // Insert new record
+        const insertResult = await supabase
+          .from('app_settings')
+          .insert({
+            ...settingsRecord,
+            created_at: new Date().toISOString(),
+          });
+        error = insertResult.error;
+      } else {
+        // Update existing record
+        const updateResult = await supabase
+          .from('app_settings')
+          .update(settingsRecord)
+          .eq('id', settingsRecord.id);
+        error = updateResult.error;
+      }
 
       if (error) {
         throw error;
-      } else {
-        toast.success('Settings saved successfully!');
       }
+
+      console.log('Settings saved to database successfully');
+      setIsDbConnected(true);
+      return true;
+
     } catch (error) {
       console.error('Database save error:', error);
-      toast.error('Failed to save settings to database, saved locally instead');
+      setIsDbConnected(false);
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  // Load settings from database on app initialization
-  const loadSettingsFromDatabase = async () => {
+  // Load settings from database with comprehensive error handling
+  const loadSettingsFromDatabase = async (): Promise<boolean> => {
     if (!isSupabaseAvailable) {
-      return;
-    }
-
-    if (!isDbConnected) {
-      console.warn('Database not available, using localStorage settings');
-      return;
+      console.warn('Supabase not available, using localStorage settings');
+      return false;
     }
 
     try {
       setLoading(true);
+      
       const { data, error } = await supabase
         .from('app_settings')
         .select('*')
         .limit(1);
 
       if (error) {
-        console.warn('App settings table not found or error:', error);
-        return;
+        if (error.code === 'PGRST116') {
+          // Table exists but is empty - create default settings
+          console.log('App settings table is empty, creating default settings');
+          await createDefaultSettings();
+          return true;
+        }
+        throw error;
       }
 
       if (!data || data.length === 0) {
-        // Table is empty, insert default settings
-        const defaultSettings = {
-          id: '1',
-          studio_name: 'Forfit Ladies',
-          language: 'en',
-          currency: 'USD',
-          timezone: 'UTC',
-          theme: {
-            primary: '#DC2684',
-            secondary: '#523A7A',
-            accentGold: '#FAD45B',
-            accentOrange: '#F19F67',
-          },
-          typing_glow_enabled: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        try {
-          const { error: insertError } = await supabase
-          .from('app_settings')
-          .insert(defaultSettings);
-
-          if (insertError) {
-            console.error('Failed to insert default settings:', insertError);
-            return;
-          }
-        } catch (insertError) {
-          console.error('Failed to insert default settings:', insertError);
-          return;
-        }
-
-        // Set the default settings in state
-        const appSettings: AppSettings = {
-          id: defaultSettings.id,
-          studioName: defaultSettings.studio_name,
-          currency: defaultSettings.currency,
-          language: defaultSettings.language as 'en' | 'ar',
-          timezone: defaultSettings.timezone,
-          theme: defaultSettings.theme,
-          typingGlowEnabled: defaultSettings.typing_glow_enabled,
-        };
-        
-        setSettings(appSettings);
-        localStorage.setItem('forfit-settings', JSON.stringify(appSettings));
-        return;
+        console.log('No settings found, creating default settings');
+        await createDefaultSettings();
+        return true;
       }
 
-      if (data && data.length > 0) {
-        const dbData = data[0];
-        const dbSettings: AppSettings = {
-          id: dbData.id,
-          studioName: dbData.studio_name || 'Forfit Ladies',
-          currency: dbData.currency || 'USD',
-          language: dbData.language || 'en',
-          timezone: dbData.timezone || 'UTC',
-          logo: dbData.logo,
-          favicon: dbData.favicon,
-          theme: dbData.theme || {
-            primary: '#DC2684',
-            secondary: '#523A7A',
-            accentGold: '#FAD45B',
-            accentOrange: '#F19F67',
-          },
-          typingGlowEnabled: dbData.typing_glow_enabled !== false,
-        };
-        
-        setSettings(dbSettings);
-        // Also update localStorage as cache
-        localStorage.setItem('forfit-settings', JSON.stringify(dbSettings));
-      }
+      // Load settings from database
+      const dbSettings = data[0];
+      const loadedSettings: AppSettings = {
+        id: dbSettings.id,
+        studioName: dbSettings.studio_name || 'Forfit Ladies',
+        currency: dbSettings.currency || 'USD',
+        language: (dbSettings.language as 'en' | 'ar') || 'en',
+        timezone: dbSettings.timezone || 'UTC',
+        logo: dbSettings.studio_logo || undefined,
+        favicon: dbSettings.favicon_url || undefined,
+        theme: dbSettings.theme || {
+          primary: '#DC2684',
+          secondary: '#523A7A',
+          accentGold: '#FAD45B',
+          accentOrange: '#F19F67',
+        },
+        typingGlowEnabled: dbSettings.typing_glow_enabled !== false,
+      };
+      
+      setSettings(loadedSettings);
+      localStorage.setItem('forfit-settings', JSON.stringify(loadedSettings));
+      console.log('Settings loaded from database successfully');
+      setIsDbConnected(true);
+      return true;
+
     } catch (error) {
       console.error('Failed to load settings from database:', error);
+      setIsDbConnected(false);
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  // Load settings on app initialization
-  useEffect(() => {
-    const initializeSettings = async () => {
-      // Wait a bit for Supabase connection test to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await loadSettingsFromDatabase();
-    };
-    
-    initializeSettings();
-  }, []);
+  // Create default settings in database
+  const createDefaultSettings = async (): Promise<boolean> => {
+    if (!isSupabaseAvailable) {
+      return false;
+    }
+
+    try {
+      const defaultSettings = {
+        id: '1',
+        studio_name: 'Forfit Ladies',
+        language: 'en',
+        currency: 'USD',
+        timezone: 'UTC',
+        studio_logo: null,
+        favicon_url: null,
+        theme: {
+          primary: '#DC2684',
+          secondary: '#523A7A',
+          accentGold: '#FAD45B',
+          accentOrange: '#F19F67',
+        },
+        typing_glow_enabled: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('app_settings')
+        .insert(defaultSettings);
+
+      if (error) {
+        throw error;
+      }
+
+      // Set the default settings in state
+      const appSettings: AppSettings = {
+        id: defaultSettings.id,
+        studioName: defaultSettings.studio_name,
+        currency: defaultSettings.currency,
+        language: defaultSettings.language as 'en' | 'ar',
+        timezone: defaultSettings.timezone,
+        theme: defaultSettings.theme,
+        typingGlowEnabled: defaultSettings.typing_glow_enabled,
+      };
+      
+      setSettings(appSettings);
+      localStorage.setItem('forfit-settings', JSON.stringify(appSettings));
+      console.log('Default settings created successfully');
+      return true;
+
+    } catch (error) {
+      console.error('Failed to create default settings:', error);
+      return false;
+    }
+  };
 
   const getSubscriptionPlans = (): Subscription[] => {
     try {
@@ -482,7 +539,7 @@ const testSupabaseConnection = async () => {
     payments,
     attendance,
     settings,
-    loading,
+    loading: loading || !isInitialized,
     error,
     addMember,
     updateMember,

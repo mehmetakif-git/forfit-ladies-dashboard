@@ -66,7 +66,7 @@ const FaviconUpload: React.FC<FaviconUploadProps> = ({ currentFavicon, onFavicon
       return;
     }
 
-    toast.loading('Uploading favicon...');
+    const loadingToast = toast.loading('Uploading favicon...');
     
     try {
       const result = await uploadToStorage(file);
@@ -74,15 +74,15 @@ const FaviconUpload: React.FC<FaviconUploadProps> = ({ currentFavicon, onFavicon
         setPreview(result);
         onFaviconChange(result);
         updateFavicon(result);
-        toast.dismiss();
+        toast.dismiss(loadingToast);
         toast.success('Favicon uploaded successfully!');
       } else {
-        toast.dismiss();
+        toast.dismiss(loadingToast);
         toast.error('Failed to upload favicon');
       }
     } catch (error) {
       console.error('Favicon upload error:', error);
-      toast.dismiss();
+      toast.dismiss(loadingToast);
       toast.error('Failed to upload favicon');
     }
   };

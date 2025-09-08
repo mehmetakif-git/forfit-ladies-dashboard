@@ -50,8 +50,13 @@ const AdminPanel: React.FC = () => {
   };
 
   const saveSettings = () => {
-    updateSettings(localSettings);
-    toast.success('Saving settings...');
+    try {
+      updateSettings(localSettings);
+      // Toast will be shown by updateSettings function
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error('Failed to save settings');
+    }
   };
 
   const resetToDefault = () => {

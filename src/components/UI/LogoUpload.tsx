@@ -65,22 +65,22 @@ const LogoUpload: React.FC<LogoUploadProps> = ({ currentLogo, onLogoChange, clas
       return;
     }
 
-    toast.loading('Uploading logo...');
+    const loadingToast = toast.loading('Uploading logo...');
     
     try {
       const result = await uploadToStorage(file);
       if (result) {
-      setPreview(result);
-      onLogoChange(result);
-        toast.dismiss();
+        setPreview(result);
+        onLogoChange(result);
+        toast.dismiss(loadingToast);
         toast.success('Logo uploaded successfully!');
       } else {
-        toast.dismiss();
+        toast.dismiss(loadingToast);
         toast.error('Failed to upload logo');
       }
     } catch (error) {
       console.error('Logo upload error:', error);
-      toast.dismiss();
+      toast.dismiss(loadingToast);
       toast.error('Failed to upload logo');
     }
   };

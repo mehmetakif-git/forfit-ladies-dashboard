@@ -7,6 +7,7 @@ import { LoadingProvider } from './context/LoadingContext';
 import { ThemeProvider } from './components/theme/ThemeProvider';
 import ErrorBoundary from './components/Auth/ErrorBoundary';
 import PageLoader from './components/UI/PageLoader';
+import ConnectionTest from './components/ConnectionTest';
 import Layout from './components/Layout/Layout';
 import LoginForm from './components/Auth/LoginForm';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -31,11 +32,13 @@ import SecurityCameras from './pages/SecurityCameras';
 import FeatureManagement from './pages/FeatureManagement';
 import { useLocation } from 'react-router-dom';
 import { useLoading } from './context/LoadingContext';
+import { useAuth } from './context/AuthContext';
 import { useEffect } from 'react';
 import './styles/theme.css';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const { setIsLoading, setLoadingText } = useLoading();
   const location = useLocation();
 
@@ -230,6 +233,13 @@ function App() {
                   
                   <PageLoader />
                   <AppContent />
+                  
+                  {/* Connection Test - Admin Only */}
+                  {user?.role === 'admin' && (
+                    <div className="fixed bottom-4 right-4 z-40">
+                      <ConnectionTest />
+                    </div>
+                  )}
                   
                   <Toaster
                     position="top-right"
