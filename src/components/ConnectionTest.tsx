@@ -241,11 +241,13 @@ const ConnectionTest: React.FC<ConnectionTestProps> = ({
             <h4 className="text-white font-medium mb-3">Database Tables</h4>
             <div className="space-y-2">
               {[
+                'settings',
                 'app_settings',
                 'members', 
                 'payments',
                 'attendance_records',
-                'subscription_plans'
+                'subscription_plans',
+                'feature_toggles'
               ].map(table => (
                 <div key={table} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                   <span className="text-white/80 text-sm">{table}</span>

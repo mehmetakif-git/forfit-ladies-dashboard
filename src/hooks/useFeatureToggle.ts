@@ -26,14 +26,18 @@ export const useFeatureToggle = (featureName: string): boolean => {
           .single();
 
         if (error) {
-          console.warn(`Feature toggle not found for ${featureName}, defaulting to enabled`);
+          if (error.code === 'PGRST116') {
+            console.warn(`Feature toggles table empty for ${featureName}, defaulting to enabled`);
+          } else {
+            console.warn(`Feature toggle not found for ${featureName}, defaulting to enabled`);
+          }
           setIsEnabled(true);
           setLoading(false);
           return;
         }
 
         if (data) {
-          const hasRolePermission = user?.role && data.role_permissions.includes(user.role);
+          const hasRolePermission = user?.role && Array.isArray(data.role_permissions) && data.role_permissions.includes(user.role);
           setIsEnabled(data.enabled && hasRolePermission);
         }
       } catch (error) {

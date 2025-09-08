@@ -101,7 +101,7 @@ const SystemTestingContent: React.FC = () => {
 
   // Test Functions
   const testDatabaseConnection = async () => {
-    const { data, error } = await supabase.from('app_settings').select('id').limit(1);
+    const { data, error } = await supabase.from('settings').select('id').limit(1);
     if (error) throw new Error(`Database connection failed: ${error.message}`);
     if (!data) throw new Error('No data returned from database');
   };
