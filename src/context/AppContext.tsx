@@ -109,20 +109,32 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     const initializeApp = async () => {
       try {
         setLoading(true);
+        setError(null);
         
-        // Test database connection
-        const connectionResult = await testSupabaseConnection();
-        setIsDbConnected(connectionResult.success);
-        
-        if (connectionResult.success) {
-          console.log('Database connected, loading settings...');
-          await loadSettingsFromDatabase();
+        if (isSupabaseAvailable) {
+          // Test database connection
+          const connectionResult = await testSupabaseConnection();
+          setIsDbConnected(connectionResult.success);
+          
+          if (connectionResult.success) {
+            console.log('Database connected, loading settings...');
+            try {
+              await loadSettingsFromDatabase();
+            } catch (dbError) {
+              console.warn('Failed to load settings from database, using localStorage:', dbError);
+              setIsDbConnected(false);
+            }
+          } else {
+            console.warn('Database unavailable, using localStorage settings');
+          }
         } else {
-          console.warn('Database unavailable, using localStorage settings');
+          console.warn('Supabase not available, using localStorage settings');
+          setIsDbConnected(false);
         }
       } catch (error) {
         console.error('App initialization error:', error);
-        setError('Failed to initialize application');
+        setError(null); // Don't show error to user, just log it
+        setIsDbConnected(false);
       } finally {
         setLoading(false);
         setIsInitialized(true);
@@ -334,14 +346,27 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     try {
       setLoading(true);
       
-      // First check if settings record exists
-      const { data: existingSettings, error: selectError } = await supabase
-        .from('app_settings')
-        .select('id')
-        .limit(1);
-
-      if (selectError && selectError.code !== 'PGRST116') {
-        throw selectError;
+      // Check if app_settings table exists and has records
+      let existingSettings = null;
+      try {
+        const { data, error: selectError } = await supabase
+          .from('app_settings')
+          .select('id')
+          .limit(1);
+        
+        if (selectError) {
+          if (selectError.code === 'PGRST116') {
+            // Table exists but is empty
+            existingSettings = [];
+          } else {
+            throw selectError;
+          }
+        } else {
+          existingSettings = data;
+        }
+      } catch (tableError) {
+        console.warn('app_settings table not accessible:', tableError);
+        return false;
       }
 
       const settingsRecord = {
@@ -359,22 +384,22 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
       let error;
       
-      if (!existingSettings || existingSettings.length === 0) {
+      if (!existingSettings || (Array.isArray(existingSettings) && existingSettings.length === 0)) {
         // Insert new record
-        const insertResult = await supabase
+        const { error: insertError } = await supabase
           .from('app_settings')
           .insert({
             ...settingsRecord,
             created_at: new Date().toISOString(),
           });
-        error = insertResult.error;
+        error = insertError;
       } else {
         // Update existing record
-        const updateResult = await supabase
+        const { error: updateError } = await supabase
           .from('app_settings')
           .update(settingsRecord)
           .eq('id', settingsRecord.id);
-        error = updateResult.error;
+        error = updateError;
       }
 
       if (error) {
@@ -402,26 +427,47 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
 
     try {
-      setLoading(true);
+      // Don't set loading here as it's already set in initializeApp
       
-      const { data, error } = await supabase
-        .from('app_settings')
-        .select('*')
-        .limit(1);
+      let data = null;
+      let error = null;
+      
+      try {
+        const result = await supabase
+          .from('app_settings')
+          .select('*')
+          .limit(1);
+        data = result.data;
+        error = result.error;
+      } catch (queryError) {
+        console.warn('Failed to query app_settings table:', queryError);
+        return false;
+      }
 
       if (error) {
         if (error.code === 'PGRST116') {
           // Table exists but is empty - create default settings
           console.log('App settings table is empty, creating default settings');
-          await createDefaultSettings();
+          try {
+            await createDefaultSettings();
+          } catch (createError) {
+            console.warn('Failed to create default settings:', createError);
+            return false;
+          }
           return true;
         }
-        throw error;
+        console.warn('Database query error:', error);
+        return false;
       }
 
       if (!data || data.length === 0) {
         console.log('No settings found, creating default settings');
-        await createDefaultSettings();
+        try {
+          await createDefaultSettings();
+        } catch (createError) {
+          console.warn('Failed to create default settings:', createError);
+          return false;
+        }
         return true;
       }
 
@@ -454,14 +500,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       console.error('Failed to load settings from database:', error);
       setIsDbConnected(false);
       return false;
-    } finally {
-      setLoading(false);
     }
   };
 
   // Create default settings in database
   const createDefaultSettings = async (): Promise<boolean> => {
     if (!isSupabaseAvailable) {
+      console.warn('Supabase not available, cannot create default settings');
       return false;
     }
 
@@ -485,12 +530,20 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase
-        .from('app_settings')
-        .insert(defaultSettings);
+      let error = null;
+      try {
+        const result = await supabase
+          .from('app_settings')
+          .insert(defaultSettings);
+        error = result.error;
+      } catch (insertError) {
+        console.warn('Failed to insert default settings:', insertError);
+        return false;
+      }
 
       if (error) {
-        throw error;
+        console.warn('Insert error:', error);
+        return false;
       }
 
       // Set the default settings in state
