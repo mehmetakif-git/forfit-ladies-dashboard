@@ -36,8 +36,7 @@ import { useEffect } from 'react';
 import './styles/theme.css';
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated } = useAuth();
-  const { user } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { setIsLoading, setLoadingText } = useLoading();
   const location = useLocation();
 
