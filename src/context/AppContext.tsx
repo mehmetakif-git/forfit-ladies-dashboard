@@ -116,12 +116,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           const connectionResult = await testSupabaseConnection();
           setIsDbConnected(connectionResult.success);
           
-          if (connectionResult.success) {
-            console.log('Database connected, loading settings...');
+            // Table exists but is empty
+            console.log('Settings table is empty, using localStorage settings');
             try {
-              await loadSettingsFromDatabase();
+              return true; // Use localStorage settings
             } catch (dbError) {
-              console.warn('Failed to load settings from database, using localStorage:', dbError);
+              console.warn('Failed to handle empty settings:', createError);
               setIsDbConnected(false);
             }
           } else {
@@ -434,7 +434,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       
       try {
         const result = await supabase
-          .from('app_settings')
+          .from('settings')
           .select('*')
           .limit(1);
         data = result.data;
@@ -447,39 +447,43 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (error) {
         if (error.code === 'PGRST116') {
           // Table exists but is empty - create default settings
-          console.log('App settings table is empty, creating default settings');
-          try {
-            await createDefaultSettings();
-          } catch (createError) {
-            console.warn('Failed to create default settings:', createError);
-            return false;
-          }
+          console.log('No settings found, using localStorage settings');
           return true;
         }
         console.warn('Database query error:', error);
-        return false;
-      }
+        // Parse settings from key-value pairs
+        const settingsMap = new Map();
+        data.forEach(row => {
+          try {
+            settingsMap.set(row.key, row.value ? JSON.parse(row.value) : row.value);
+          } catch {
+            settingsMap.set(row.key, row.value);
+          }
+        });
 
-      if (!data || data.length === 0) {
-        console.log('No settings found, creating default settings');
-        try {
-          await createDefaultSettings();
-        } catch (createError) {
-          console.warn('Failed to create default settings:', createError);
-          return false;
+        if (settingsMap.size > 0) {
+          const loadedSettings: AppSettings = {
+            id: '1',
+            studioName: settingsMap.get('studio_name') || 'Forfit Ladies',
+            currency: settingsMap.get('currency') || 'USD',
+            language: settingsMap.get('language') || 'en',
+            timezone: settingsMap.get('timezone') || 'UTC',
+            logo: settingsMap.get('studio_logo') || undefined,
+            favicon: settingsMap.get('favicon_url') || undefined,
+            theme: settingsMap.get('theme') || {
+              primary: '#DC2684',
+              secondary: '#523A7A',
+              accentGold: '#FAD45B',
+              accentOrange: '#F19F67',
+            },
+            typingGlowEnabled: settingsMap.get('typing_glow_enabled') !== false,
+          };
+          
+          setSettings(loadedSettings);
+          localStorage.setItem('forfit-settings', JSON.stringify(loadedSettings));
+          console.log('Settings loaded from database successfully');
         }
-        return true;
-      }
-
-      // Load settings from database
-      const dbSettings = data[0];
-      const loadedSettings: AppSettings = {
-        id: dbSettings.id,
-        studioName: dbSettings.studio_name || 'Forfit Ladies',
-        currency: dbSettings.currency || 'USD',
-        language: (dbSettings.language as 'en' | 'ar') || 'en',
-        timezone: dbSettings.timezone || 'UTC',
-        logo: dbSettings.studio_logo || undefined,
+        
         favicon: dbSettings.favicon_url || undefined,
         theme: dbSettings.theme || {
           primary: '#DC2684',
@@ -499,71 +503,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Failed to load settings from database:', error);
       setIsDbConnected(false);
-      return false;
-    }
-  };
-
-  // Create default settings in database
-  const createDefaultSettings = async (): Promise<boolean> => {
-    if (!isSupabaseAvailable) {
-      console.warn('Supabase not available, cannot create default settings');
-      return false;
-    }
-
-    try {
-      const defaultSettings = {
-        id: '1',
-        studio_name: 'Forfit Ladies',
-        language: 'en',
-        currency: 'USD',
-        timezone: 'UTC',
-        studio_logo: null,
-        favicon_url: null,
-        theme: {
-          primary: '#DC2684',
-          secondary: '#523A7A',
-          accentGold: '#FAD45B',
-          accentOrange: '#F19F67',
-        },
-        typing_glow_enabled: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      let error = null;
-      try {
-        const result = await supabase
-          .from('app_settings')
-          .insert(defaultSettings);
-        error = result.error;
-      } catch (insertError) {
-        console.warn('Failed to insert default settings:', insertError);
-        return false;
-      }
-
-      if (error) {
-        console.warn('Insert error:', error);
-        return false;
-      }
-
-      // Set the default settings in state
-      const appSettings: AppSettings = {
-        id: defaultSettings.id,
-        studioName: defaultSettings.studio_name,
-        currency: defaultSettings.currency,
-        language: defaultSettings.language as 'en' | 'ar',
-        timezone: defaultSettings.timezone,
-        theme: defaultSettings.theme,
-        typingGlowEnabled: defaultSettings.typing_glow_enabled,
-      };
-      
-      setSettings(appSettings);
-      localStorage.setItem('forfit-settings', JSON.stringify(appSettings));
-      console.log('Default settings created successfully');
-      return true;
-
-    } catch (error) {
-      console.error('Failed to create default settings:', error);
       return false;
     }
   };
