@@ -186,7 +186,11 @@ const createMockClient = () => ({
 });
 
 // Export the client (real or mock)
-export { supabase: supabase || createMockClient(), isSupabaseAvailable, connectionStatus, lastTestResult };
+export const client = supabase || createMockClient();
+export { client as supabase };
+export { isSupabaseAvailable };
+export { connectionStatus };
+export { lastTestResult };
 
 // Utility functions
 export const getConnectionStatus = () => connectionStatus;
