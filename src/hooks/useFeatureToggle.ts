@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseAvailable } from '../lib/supabase';
 
 interface FeatureToggle {
   id: string;
@@ -19,6 +19,13 @@ export const useFeatureToggle = (featureName: string): boolean => {
   useEffect(() => {
     const checkFeatureToggle = async () => {
       try {
+        if (!isSupabaseAvailable) {
+          console.warn('Supabase not available, defaulting to enabled for feature:', featureName);
+          setIsEnabled(true);
+          setLoading(false);
+          return;
+        }
+
         const { data, error } = await supabase
           .from('feature_toggles')
           .select('*')
@@ -65,6 +72,13 @@ export const useAllFeatureToggles = (): { features: FeatureToggle[]; loading: bo
   useEffect(() => {
     const loadFeatureToggles = async () => {
       try {
+        if (!isSupabaseAvailable) {
+          console.warn('Supabase not available, using empty feature toggles array');
+          setFeatures([]);
+          setLoading(false);
+          return;
+        }
+
         const { data, error } = await supabase
           .from('feature_toggles')
           .select('*')
@@ -98,6 +112,11 @@ export const updateFeatureToggle = async (
   enabled: boolean, 
   rolePermissions?: string[]
 ): Promise<boolean> => {
+  if (!isSupabaseAvailable) {
+    console.warn('Supabase not available, cannot update feature toggle');
+    return false;
+  }
+
   try {
     const updateData: any = { enabled, updated_at: new Date().toISOString() };
     if (rolePermissions) {
@@ -128,6 +147,11 @@ export const createFeatureToggle = async (
   description: string = '',
   category: string = 'general'
 ): Promise<boolean> => {
+  if (!isSupabaseAvailable) {
+    console.warn('Supabase not available, cannot create feature toggle');
+    return false;
+  }
+
   try {
     const { error } = await supabase
       .from('feature_toggles')
