@@ -329,7 +329,7 @@ export interface Database {
           payment_method: string | null;
           payment_date: string | null;
           status: string | null;
-  };
+          };
           id: number;
           id?: number;
           member_id?: number | null;
@@ -350,3 +350,7 @@ export interface Database {
           id?: number;
           member_id?: number | null;
           check_in?: string | null;
+      }
+    }
+  }
+}
