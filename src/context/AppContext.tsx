@@ -305,7 +305,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       ));
     } catch (error) {
       console.error('Error checking out member:', error);
-      setError('Failed to check out member');
+      setError('Fai
+      )
+    }
+  }
+}led to check out member');
     }
   };
 
