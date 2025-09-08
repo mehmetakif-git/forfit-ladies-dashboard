@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* RTL Support */
+[dir="rtl"] {
+  text-align: right;
+}
+
+[dir="rtl"] .flex {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .space-x-2 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-x-reverse: 1;
+}
+
+[dir="rtl"] .space-x-3 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-x-reverse: 1;
+}
+
+[dir="rtl"] .space-x-4 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-x-reverse: 1;
+}
+
+[dir="rtl"] .gap-2,
+[dir="rtl"] .gap-3,
+[dir="rtl"] .gap-4 {
+  flex-direction: row-reverse;
+}
+
+/* Dropdown Theme Styling */
+.dropdown-theme {
+  background: rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #E5E6E6 !important;
+}
+
+.dropdown-theme option {
+  background: #523A7A !important;
+  color: #E5E6E6 !important;
+  padding: 8px 12px !important;
+}
+
+.dropdown-theme option:hover {
+  background: #DC2684 !important;
+}
+
+.dropdown-theme:focus {
+  outline: none !important;
+  ring: 2px solid rgba(220, 38, 132, 0.5) !important;
+  border-color: rgba(220, 38, 132, 0.5) !important;
+}
+
+/* Select elements styling */
+select {
+  background: rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #E5E6E6 !important;
+}
+
+select option {
+  background: #523A7A !important;
+  color: #E5E6E6 !important;
+}
+
+select:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 132, 0.5) !important;
+  border-color: rgba(220, 38, 132, 0.5) !important;
+}
