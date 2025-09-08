@@ -116,12 +116,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           const connectionResult = await testSupabaseConnection();
           setIsDbConnected(connectionResult.success);
           
+          if (connectionResult.success) {
             // Table exists but is empty
             console.log('Settings table is empty, using localStorage settings');
             try {
               return true; // Use localStorage settings
             } catch (dbError) {
-              console.warn('Failed to handle empty settings:', createError);
+              console.warn('Failed to handle empty settings:', dbError);
               setIsDbConnected(false);
             }
           } else {
@@ -131,14 +132,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           console.warn('Supabase not available, using localStorage settings');
           setIsDbConnected(false);
         }
-      } catch (error) {
-        console.error('App initialization error:', error);
-        setError(null); // Don't show error to user, just log it
-        setIsDbConnected(false);
-      } finally {
-        setLoading(false);
-        setIsInitialized(true);
-      }
       } catch (error) {
         console.error('App initialization error:', error);
         setError(null); // Don't show error to user, just log it
@@ -313,11 +306,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       ));
     } catch (error) {
       console.error('Error checking out member:', error);
-      setError('Fai
-      )
-    }
-  }
-}led to check out member');
+      setError('Failed to check out member');
     }
   };
 
@@ -463,6 +452,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           return true;
         }
         console.warn('Database query error:', error);
+        return false;
+      }
+
+      if (data && data.length > 0) {
         // Parse settings from key-value pairs
         const settingsMap = new Map();
         data.forEach(row => {
@@ -496,21 +489,34 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           console.log('Settings loaded from database successfully');
         }
         
-        favicon: dbSettings.favicon_url || undefined,
-        theme: dbSettings.theme || {
-          primary: '#DC2684',
-          secondary: '#523A7A',
-          accentGold: '#FAD45B',
-          accentOrange: '#F19F67',
-        },
-        typingGlowEnabled: dbSettings.typing_glow_enabled !== false,
-      };
-      
-      setSettings(loadedSettings);
-      localStorage.setItem('forfit-settings', JSON.stringify(loadedSettings));
-      console.log('Settings loaded from database successfully');
-      setIsDbConnected(true);
-      return true;
+        setIsDbConnected(true);
+        return true;
+      } else {
+        // Handle single settings record format
+        const dbSettings = data[0];
+        const loadedSettings: AppSettings = {
+          id: dbSettings.id || '1',
+          studioName: dbSettings.studio_name || 'Forfit Ladies',
+          currency: dbSettings.currency || 'USD',
+          language: dbSettings.language || 'en',
+          timezone: dbSettings.timezone || 'UTC',
+          logo: dbSettings.studio_logo || undefined,
+          favicon: dbSettings.favicon_url || undefined,
+          theme: dbSettings.theme || {
+            primary: '#DC2684',
+            secondary: '#523A7A',
+            accentGold: '#FAD45B',
+            accentOrange: '#F19F67',
+          },
+          typingGlowEnabled: dbSettings.typing_glow_enabled !== false,
+        };
+        
+        setSettings(loadedSettings);
+        localStorage.setItem('forfit-settings', JSON.stringify(loadedSettings));
+        console.log('Settings loaded from database successfully');
+        setIsDbConnected(true);
+        return true;
+      }
 
     } catch (error) {
       console.error('Failed to load settings from database:', error);
