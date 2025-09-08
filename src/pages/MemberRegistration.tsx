@@ -26,11 +26,21 @@ const MemberRegistration: React.FC = () => {
   const loadRegistrationData = async () => {
     try {
       // Load registration questions
-      const { data: questionsData, error: questionsError } = await supabase
-        .from('registration_questions')
-        .select('*')
-        .eq('is_active', true)
-        .order('order_index');
+      let questionsData = null;
+      let questionsError = null;
+      
+      try {
+        const result = await supabase
+          .from('registration_questions')
+          .select('*')
+          .eq('active', true)
+          .order('order_index');
+        questionsData = result.data;
+        questionsError = result.error;
+      } catch (queryError) {
+        console.warn('Failed to query registration_questions table:', queryError);
+        questionsError = queryError;
+      }
       
       if (questionsError) {
         console.warn('Registration questions table not found, using fallback questions');
@@ -57,11 +67,20 @@ const MemberRegistration: React.FC = () => {
       }
 
       // Load subscription plans
-      const { data: plansData, error: plansError } = await supabase
-        .from('subscription_plans')
-        .select('*')
-        .eq('enabled', true)
-        .order('price');
+      let plansData = null;
+      let plansError = null;
+      
+      try {
+        const result = await supabase
+          .from('subscription_plans')
+          .select('*')
+          .order('price');
+        plansData = result.data;
+        plansError = result.error;
+      } catch (queryError) {
+        console.warn('Failed to query subscription_plans table:', queryError);
+        plansError = queryError;
+      }
       
       if (plansError) {
         console.warn('Subscription plans table not found, using fallback plans');

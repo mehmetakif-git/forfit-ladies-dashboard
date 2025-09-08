@@ -42,11 +42,21 @@ const CustomerPortal: React.FC = () => {
 
   const loadRegistrationQuestions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('registration_questions')
-        .select('*')
-        .eq('active', true)
-        .order('order_index');
+      let data = null;
+      let error = null;
+      
+      try {
+        const result = await supabase
+          .from('registration_questions')
+          .select('*')
+          .eq('active', true)
+          .order('order_index');
+        data = result.data;
+        error = result.error;
+      } catch (queryError) {
+        console.warn('Failed to query registration_questions table:', queryError);
+        error = queryError;
+      }
       
       if (error) {
         console.warn('Registration questions table not found, using fallback questions');
@@ -103,10 +113,20 @@ const CustomerPortal: React.FC = () => {
 
   const loadMemberApplications = async () => {
     try {
-      const { data, error } = await supabase
-        .from('member_applications')
-        .select('*')
-        .order('submitted_at', { ascending: false });
+      let data = null;
+      let error = null;
+      
+      try {
+        const result = await supabase
+          .from('member_applications')
+          .select('*')
+          .order('submitted_at', { ascending: false });
+        data = result.data;
+        error = result.error;
+      } catch (queryError) {
+        console.warn('Failed to query member_applications table:', queryError);
+        error = queryError;
+      }
       
       if (error) {
         console.warn('Member applications table not found, using empty array');
@@ -161,14 +181,33 @@ const CustomerPortal: React.FC = () => {
     try {
       // Submit application to database
       try {
-        const { data: application, error } = await supabase
-          .from('member_applications')
-          .insert({
-            form_data: data,
-            status: 'pending'
-          })
-          .select()
-          .single();
+        let application = null;
+        let error = null;
+        
+        try {
+          const result = await supabase
+            .from('member_applications')
+            .insert({
+              applicant_name: data.name,
+              email: data.email,
+              phone: data.phone,
+              qid: data.qid,
+              age: data.age,
+              emergency_contact: data.emergencyContact,
+              subscription_plan: data.subscriptionPlan,
+              medical_notes: data.medicalNotes,
+              signature: data.signature,
+              form_data: data,
+              status: 'pending'
+            })
+            .select()
+            .single();
+          application = result.data;
+          error = result.error;
+        } catch (queryError) {
+          console.warn('Failed to insert member application:', queryError);
+          error = queryError;
+        }
 
         if (error) throw error;
       } catch (dbError) {
@@ -205,15 +244,19 @@ const CustomerPortal: React.FC = () => {
       addMember(memberData);
 
       // Update application status
-      await supabase
-        .from('member_applications')
-        .update({
-          status: 'approved',
-          reviewed_at: new Date().toISOString(),
-          reviewed_by: user?.name,
-          admin_notes: adminNotes
-        })
-        .eq('id', application.id);
+      try {
+        await supabase
+          .from('member_applications')
+          .update({
+            status: 'approved',
+            reviewed_at: new Date().toISOString(),
+            reviewed_by: user?.id,
+            admin_notes: adminNotes
+          })
+          .eq('id', application.id);
+      } catch (updateError) {
+        console.warn('Failed to update application status:', updateError);
+      }
 
       await loadMemberApplications();
       setSelectedApplication(null);
@@ -227,15 +270,19 @@ const CustomerPortal: React.FC = () => {
 
   const handleRejectApplication = async (application: MemberApplication) => {
     try {
-      await supabase
-        .from('member_applications')
-        .update({
-          status: 'rejected',
-          reviewed_at: new Date().toISOString(),
-          reviewed_by: user?.name,
-          admin_notes: adminNotes
-        })
-        .eq('id', application.id);
+      try {
+        await supabase
+          .from('member_applications')
+          .update({
+            status: 'rejected',
+            reviewed_at: new Date().toISOString(),
+            reviewed_by: user?.id,
+            admin_notes: adminNotes
+          })
+          .eq('id', application.id);
+      } catch (updateError) {
+        console.warn('Failed to update application status:', updateError);
+      }
 
       await loadMemberApplications();
       setSelectedApplication(null);
@@ -793,17 +840,24 @@ const FormBuilder: React.FC<{
     }
 
     try {
-      const { error } = await supabase
-        .from('registration_questions')
-        .insert({
-          question_text: newQuestion.questionText,
-          field_type: newQuestion.fieldType,
-          field_name: newQuestion.fieldName,
-          options: newQuestion.options && newQuestion.options.length > 0 ? JSON.stringify(newQuestion.options) : null,
-          is_required: newQuestion.isRequired,
-          order_index: questions.length + 1,
-          is_active: true
-        });
+      let error = null;
+      
+      try {
+        const result = await supabase
+          .from('registration_questions')
+          .insert({
+            question_text: newQuestion.questionText,
+            field_type: newQuestion.fieldType,
+            options: newQuestion.options && newQuestion.options.length > 0 ? JSON.stringify(newQuestion.options) : null,
+            required: newQuestion.isRequired,
+            order_index: questions.length + 1,
+            active: true
+          });
+        error = result.error;
+      } catch (queryError) {
+        console.warn('Failed to insert registration question:', queryError);
+        error = queryError;
+      }
 
       if (error) throw error;
 
@@ -833,10 +887,18 @@ const FormBuilder: React.FC<{
   const handleDeleteQuestion = async (questionId: string) => {
     if (window.confirm('Are you sure you want to delete this question?')) {
       try {
-        const { error } = await supabase
-          .from('registration_questions')
-          .delete()
-          .eq('id', questionId);
+        let error = null;
+        
+        try {
+          const result = await supabase
+            .from('registration_questions')
+            .delete()
+            .eq('id', questionId);
+          error = result.error;
+        } catch (queryError) {
+          console.warn('Failed to delete registration question:', queryError);
+          error = queryError;
+        }
 
         if (error) throw error;
 
