@@ -32,7 +32,6 @@ import SecurityCameras from './pages/SecurityCameras';
 import FeatureManagement from './pages/FeatureManagement';
 import { useLocation } from 'react-router-dom';
 import { useLoading } from './context/LoadingContext';
-import { useAuth } from './context/AuthContext';
 import { useEffect } from 'react';
 import './styles/theme.css';
 
