@@ -139,6 +139,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         setLoading(false);
         setIsInitialized(true);
       }
+      } catch (error) {
+        console.error('App initialization error:', error);
+        setError(null); // Don't show error to user, just log it
+        setIsDbConnected(false);
+      } finally {
+        setLoading(false);
+        setIsInitialized(true);
+      }
     };
 
     initializeApp();
