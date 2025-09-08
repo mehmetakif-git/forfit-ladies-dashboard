@@ -430,35 +430,26 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     try {
       // Don't set loading here as it's already set in initializeApp
       
-      let data = null;
-      let error = null;
-      
-      try {
-        const result = await supabase
-          .from('settings')
-          .select('*')
-          .limit(1);
-        data = result.data;
-        error = result.error;
-      } catch (queryError) {
-        console.warn('Failed to query app_settings table:', queryError);
-        return false;
-      }
+      const { data: appSettingsData, error: appSettingsError } = await supabase
+        .from('app_settings')
+        .select('*')
+        .limit(1)
+        .single();
 
-      if (error) {
-        if (error.code === 'PGRST116') {
+      if (appSettingsError) {
+        if (appSettingsError.code === 'PGRST116') {
           // Table exists but is empty - create default settings
           console.log('No settings found, using localStorage settings');
           return true;
         }
-        console.warn('Database query error:', error);
+        console.warn('Database query error:', appSettingsError);
         return false;
       }
 
-      if (data && data.length > 0) {
+      if (appSettingsData && appSettingsData.length > 0) {
         // Parse settings from key-value pairs
         const settingsMap = new Map();
-        data.forEach(row => {
+        appSettingsData.forEach(row => {
           try {
             settingsMap.set(row.key, row.value ? JSON.parse(row.value) : row.value);
           } catch {
@@ -493,7 +484,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         return true;
       } else {
         // Handle single settings record format
-        const dbSettings = data[0];
+        const dbSettings = appSettingsData[0];
         const loadedSettings: AppSettings = {
           id: dbSettings.id || '1',
           studioName: dbSettings.studio_name || 'Forfit Ladies',
