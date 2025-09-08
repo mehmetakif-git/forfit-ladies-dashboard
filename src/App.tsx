@@ -215,6 +215,8 @@ const AppContent: React.FC = () => {
 };
 
 function App() {
+  const { user } = useAuth();
+
   return (
     <ErrorBoundary>
       <AuthProvider>
